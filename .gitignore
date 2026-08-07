@@ -6,3 +6,10 @@ __pycache__/
 exports/
 uploads/
 .vscode/
+
+database/chats.db
+database/settings.json
+database/vectorstore/
+test*.py
+db_dump.txt
+test.pdf
