@@ -100,7 +100,7 @@ class OllamaClient:
                 f"{self.host}/api/chat",
                 json=payload,
                 stream=True,
-                timeout=self.timeout,
+                timeout=300.0,
             ) as resp:
                 if resp.status_code == 404:
                     raise OllamaConnectionError(
@@ -133,6 +133,29 @@ class OllamaClient:
             ) from exc
         except requests.exceptions.RequestException as exc:
             raise OllamaConnectionError(f"Ollama request failed: {exc}") from exc
+
+    def generate_title(self, model: str, first_message: str) -> str:
+        """Ask the model to generate a short, 3-5 word title for the conversation."""
+        prompt = (
+            f"Please write a very short title (maximum 5 words) summarizing this message: "
+            f"'{first_message}'. Respond ONLY with the title text, nothing else."
+        )
+        try:
+            title = self.chat(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.5,
+                max_tokens=20,
+            )
+            # Clean up the response (remove quotes, newlines, etc.)
+            title = title.strip(' \n\r\t"\'')
+            if len(title) > 40:
+                title = title[:37] + "..."
+            return title if title else "New Chat"
+        except Exception:
+            # Fallback if the LLM call fails
+            short = first_message.strip()
+            return (short[:37] + "...") if len(short) > 40 else short
 
     def chat(
         self,

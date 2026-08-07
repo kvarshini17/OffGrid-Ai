@@ -16,11 +16,25 @@ from core.ollama_client import OllamaClient, OllamaConnectionError
 
 def build_message_payload(conv: Conversation) -> list[dict[str, str]]:
     """Convert a Conversation's stored messages into the Ollama chat format."""
-    return [
-        {"role": m["role"], "content": m["content"]}
-        for m in conv.messages
-        if m["role"] in ("user", "assistant", "system")
-    ]
+    payload = []
+    
+    # Inject an invisible system prompt to handle PDF generation requests smoothly.
+    system_prompt = (
+        "You are OFFGRID AI, a helpful assistant. If the user asks you to generate a PDF, "
+        "do not say you cannot do it. The application UI handles the file creation automatically. "
+        "CRITICAL: When generating content for a PDF, you must output ONLY the raw requested document content. "
+        "Do NOT include any conversational filler, introductions (e.g. 'Here is your PDF'), or disclaimers "
+        "(e.g. 'I cannot generate physical files'). Just output the pure content."
+    )
+    payload.append({"role": "system", "content": system_prompt})
+    
+    for m in conv.messages:
+        if m["role"] in ("user", "assistant", "system"):
+            msg = {"role": m["role"], "content": m["content"]}
+            if "images" in m:
+                msg["images"] = m["images"]
+            payload.append(msg)
+    return payload
 
 
 def send_user_message(
@@ -31,6 +45,7 @@ def send_user_message(
     temperature: float,
     top_p: float,
     max_tokens: int,
+    images: list[str] | None = None,
 ) -> Generator[str, None, None]:
     """
     Append the user's message to the conversation, then stream back the
@@ -42,7 +57,10 @@ def send_user_message(
         OllamaConnectionError: propagated from the client so the UI layer
             can display a friendly error message.
     """
-    conv.messages.append({"role": "user", "content": user_text})
+    msg = {"role": "user", "content": user_text}
+    if images:
+        msg["images"] = images
+    conv.messages.append(msg)
     history.save_conversation(conv)
 
     payload = build_message_payload(conv)

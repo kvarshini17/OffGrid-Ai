@@ -188,7 +188,7 @@ def inject_custom_css(font_size: str = "Medium") -> None:
         }}
         </style>
         """,unsafe_allow_html=True)
-def render_message(role: str, content: str) -> None:
+def render_message(role: str, content: str, msg_idx: int = 0) -> None:
     """Render a single chat bubble for a stored message."""
     bubble_class = "user-bubble" if role == "user" else "assistant-bubble"
     justify = "flex-end" if role == "user" else "flex-start"
@@ -197,12 +197,26 @@ def render_message(role: str, content: str) -> None:
         f'<div class="chat-bubble {bubble_class}">{content}</div></div>',
         unsafe_allow_html=True,
     )
+    if role == "assistant":
+        from components.export import export_text_to_pdf
+        pdf_data = export_text_to_pdf(content)
+        cols = st.columns([0.02, 0.3, 0.68])
+        with cols[1]:
+            st.download_button(
+                label="📄 Download Response as PDF",
+                data=pdf_data,
+                file_name=f"response_{msg_idx}.pdf",
+                mime="application/pdf",
+                key=f"dl_pdf_msg_{msg_idx}",
+                help="Download this response as a PDF document",
+                use_container_width=True
+            )
 
 
 def render_conversation(conv: Conversation) -> None:
     """Render every message in a conversation."""
-    for msg in conv.messages:
-        render_message(msg["role"], msg["content"])
+    for i, msg in enumerate(conv.messages):
+        render_message(msg["role"], msg["content"], msg_idx=i)
 
 
 def render_sources(chunks: list[RetrievedChunk]) -> None:

@@ -30,7 +30,7 @@ for _dir in (DATABASE_DIR, UPLOADS_DIR, EXPORTS_DIR, VECTORSTORE_DIR):
 # Ollama configuration
 # --------------------------------------------------------------------------
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-DEFAULT_MODEL = os.environ.get("DEFAULT_OLLAMA_MODEL", "qwen2.5:0.5b")
+DEFAULT_MODEL = os.environ.get("DEFAULT_OLLAMA_MODEL", "llama3.2:latest")
 
 # --------------------------------------------------------------------------
 # RAG / PDF chat configuration

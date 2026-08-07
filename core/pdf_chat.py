@@ -142,8 +142,13 @@ class PDFChatEngine:
             d for d in documents if d.metadata["chunk_hash"] not in existing
         ]
         if new_docs:
-            self.vectorstore.add_documents(new_docs)
-            self.vectorstore.persist()
+            try:
+                self.vectorstore.add_documents(new_docs)
+                self.vectorstore.persist()
+            except Exception as exc:
+                raise PDFProcessingError(
+                    f"Failed to store extracted text in the database: {exc}"
+                ) from exc
 
         return len(new_docs)
 
@@ -172,7 +177,8 @@ class PDFChatEngine:
         """Retrieve the top-k most relevant chunks for a query."""
         try:
             results = self.vectorstore.similarity_search(query, k=k)
-        except Exception:  # noqa: BLE001 - e.g. empty collection
+        except Exception as exc:  # noqa: BLE001 - e.g. empty collection
+            print(f"Retrieval error: {exc}")
             return []
         return [
             RetrievedChunk(
@@ -191,15 +197,11 @@ class PDFChatEngine:
         temperature: float = 0.3,
         top_p: float = 0.9,
         max_tokens: int = 1024,
+        history_messages: list[dict[str, str]] | None = None,
     ) -> tuple[Generator[str, None, None], list[RetrievedChunk]]:
         """
-        Run the full RAG pipeline for a question: retrieve context, build a
-        grounded prompt, and stream the answer from Ollama.
-
-        Returns:
-            A tuple of (token generator, retrieved chunks used as sources).
-            If no relevant chunks are found, the generator yields a single
-            fixed "not found" message and the source list is empty.
+        Search the vectorstore for `query`, build a RAG prompt (including conversation history if provided),
+        and yield the assistant's streamed response.
         """
         chunks = self.retrieve(query)
         if not chunks:
@@ -219,8 +221,12 @@ class PDFChatEngine:
         )
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"},
         ]
+        if history_messages:
+            messages.extend(history_messages[-6:])
+        messages.append(
+            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"}
+        )
 
         generator = client.stream_chat(
             model=model, messages=messages, temperature=temperature,

@@ -86,19 +86,38 @@ def export_to_pdf(conv: Conversation) -> tuple[str, bytes]:
     meta_style = ParagraphStyle("MetaStyle", parent=styles["Normal"], textColor="#666666")
 
     story = [
-        Paragraph(_escape_html(conv.title), title_style),
+        Paragraph(_markdown_to_reportlab(conv.title), title_style),
         Paragraph(f"Model: {conv.model} | Created: {conv.created_at}", meta_style),
         Spacer(1, 0.25 * inch),
     ]
     for msg in conv.messages:
         speaker = "You" if msg["role"] == "user" else "Assistant"
         style = user_style if msg["role"] == "user" else assistant_style
-        text = _escape_html(msg["content"]).replace("\n", "<br/>")
-        story.append(Paragraph(f"<b>{speaker}:</b> {text}", style))
+        text = _markdown_to_reportlab(msg["content"])
+        story.append(Paragraph(f"<b>{speaker}:</b><br/>{text}", style))
 
     doc.build(story)
     filename = timestamped_filename(conv.title, "pdf")
     return filename, buffer.getvalue()
+
+
+def export_text_to_pdf(text: str) -> bytes:
+    """Generate a simple PDF from a string of text."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=LETTER,
+        leftMargin=0.75 * inch, rightMargin=0.75 * inch,
+        topMargin=0.75 * inch, bottomMargin=0.75 * inch,
+    )
+    styles = getSampleStyleSheet()
+    story = []
+    for paragraph in text.split('\n\n'):
+        if paragraph.strip():
+            safe_text = _markdown_to_reportlab(paragraph.strip())
+            story.append(Paragraph(safe_text, styles["Normal"]))
+            story.append(Spacer(1, 0.1 * inch))
+    doc.build(story)
+    return buffer.getvalue()
 
 
 def export_all_history(conversations: list[Conversation], fmt: str) -> tuple[str, bytes]:
@@ -139,11 +158,11 @@ def export_all_history(conversations: list[Conversation], fmt: str) -> tuple[str
         styles = getSampleStyleSheet()
         story = [Paragraph("Full Chat History", styles["Title"]), Spacer(1, 0.2 * inch)]
         for c in conversations:
-            story.append(Paragraph(_escape_html(c.title), styles["Heading2"]))
+            story.append(Paragraph(_markdown_to_reportlab(c.title), styles["Heading2"]))
             for msg in c.messages:
                 speaker = "You" if msg["role"] == "user" else "Assistant"
-                text = _escape_html(msg["content"]).replace("\n", "<br/>")
-                story.append(Paragraph(f"<b>{speaker}:</b> {text}", styles["Normal"]))
+                text = _markdown_to_reportlab(msg["content"])
+                story.append(Paragraph(f"<b>{speaker}:</b><br/>{text}", styles["Normal"]))
             story.append(Spacer(1, 0.2 * inch))
         doc.build(story)
         return f"chat-history_{stamp}.pdf", buffer.getvalue()
@@ -162,11 +181,36 @@ def export_all_history(conversations: list[Conversation], fmt: str) -> tuple[str
     return f"chat-history_{stamp}.txt", content.encode("utf-8")
 
 
-def _escape_html(text: str) -> str:
-    """Escape special characters so reportlab's mini-HTML doesn't break."""
-    return (
-        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    )
+import re
+
+def _markdown_to_reportlab(text: str) -> str:
+    """Parse basic Markdown into ReportLab's mini-HTML."""
+    text = (text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;"))
+    
+    # Headers
+    text = re.sub(r'^###\s+(.*)$', r'<b>\1</b>', text, flags=re.MULTILINE)
+    text = re.sub(r'^##\s+(.*)$', r'<b>\1</b>', text, flags=re.MULTILINE)
+    text = re.sub(r'^#\s+(.*)$', r'<b>\1</b>', text, flags=re.MULTILINE)
+    
+    # Bold and Italic
+    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text, flags=re.DOTALL)
+    text = re.sub(r'\*([^\*\n]+)\*', r'<i>\1</i>', text)
+    text = re.sub(r'_([^\_\n]+)_', r'<i>\1</i>', text)
+    
+    # Inline code
+    text = re.sub(r'`([^`]+)`', r'<font name="Courier">\1</font>', text)
+    
+    # Lists
+    lines = text.split('\n')
+    for i, line in enumerate(lines):
+        stripped = line.lstrip()
+        if stripped.startswith('* ') or stripped.startswith('- '):
+            lines[i] = '&bull; ' + stripped[2:]
+            
+    return "<br/>".join(lines)
+
 
 
 EXPORTERS = {

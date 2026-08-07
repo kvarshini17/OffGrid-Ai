@@ -30,18 +30,18 @@ def render_sidebar(
 ) -> None:
     """Render the entire sidebar. Mutates st.session_state to drive app.py."""
     with st.sidebar:
-        st.markdown('<h2 class="accent-header">✨ Nova AI</h2>', unsafe_allow_html=True)
+        st.markdown('<h2 class="accent-header">✨ OFFGRID AI</h2>', unsafe_allow_html=True)
 
         _render_new_chat_button(history)
-        st.divider()
-
-        _render_search_and_history(history)
         st.divider()
 
         _render_pdf_manager(pdf_engine)
         st.divider()
 
         _render_export_panel(history)
+        st.divider()
+
+        _render_search_and_history(history)
         st.divider()
 
         _render_settings_panel(ollama_client)
@@ -134,6 +134,7 @@ def _render_pdf_manager(pdf_engine: PDFChatEngine) -> None:
             for uploaded in uploaded_files:
                 dest = UPLOADS_DIR / uploaded.name
                 if dest.exists():
+                    st.success(f"✅ {uploaded.name} already indexed.")
                     continue  # already uploaded
                 try:
                     dest.write_bytes(uploaded.getbuffer())
@@ -166,6 +167,7 @@ def _render_pdf_manager(pdf_engine: PDFChatEngine) -> None:
 
             if st.button("💬 Chat with PDFs", use_container_width=True):
                 st.session_state.pdf_mode = True
+                st.session_state.trigger_pdf_analysis = True
                 st.rerun()
 
 
